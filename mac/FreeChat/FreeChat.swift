@@ -13,6 +13,7 @@ struct FreeChatApp: App {
   @NSApplicationDelegateAdaptor(FreeChatAppDelegate.self) private var appDelegate
   @Environment(\.openWindow) var openWindow
   @StateObject var conversationManager = ConversationManager.shared
+  @State var keyWindowID: String?
 
   let persistenceController = PersistenceController.shared
 
@@ -31,6 +32,24 @@ struct FreeChatApp: App {
         Button("New Chat") {
           conversationManager.newConversation(viewContext: persistenceController.container.viewContext, openWindow: openWindow)
         }.keyboardShortcut(KeyboardShortcut("N"))
+     }
+      CommandGroup(after: .newItem) {
+        Button("Export...") {
+          Task {
+            let exporter = ConversationExporter(conversation: conversationManager.currentConversation)
+            do {
+              let exportURL = try await exporter.showSavePanel()
+              try await exporter.exportMarkdown(url: exportURL)
+            } catch {
+              print("Error exporting conversation: \(error)")
+            }
+          }
+        }
+        .keyboardShortcut(KeyboardShortcut("E"))
+        .disabled(keyWindowID != "main")
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeMainNotification)) { output in
+          keyWindowID = (output.object as? NSWindow)?.identifier?.rawValue
+        }
       }
       SidebarCommands()
       CommandGroup(after: .windowList, addition: {
